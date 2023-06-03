@@ -1,1 +1,5 @@
-#to do : auth middleware with jwt
+## To Do List
+
+- [ ] Auth JWT
+- [ ] Mux Middleware
+- [ ] Dockerisation
