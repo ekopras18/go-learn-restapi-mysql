@@ -2,27 +2,13 @@ package main
 
 import (
 	"go-learn-restapi-mysql/config"
+	"go-learn-restapi-mysql/controllers/auth"
 	"go-learn-restapi-mysql/controllers/base"
 	"go-learn-restapi-mysql/controllers/blogcontroller"
 	"log"
 
 	"github.com/gin-gonic/gin"
 )
-
-// func main() {
-// 	config.ConnectDB()
-// 	r := mux.NewRouter()
-
-// 	r.HandleFunc("/login", auth.Login).Methods("POST")
-// 	r.HandleFunc("/register", auth.Register).Methods("POST")
-// 	r.HandleFunc("/logout", auth.Logout).Methods("GET")
-
-// 	err := http.ListenAndServe(":8888", r)
-
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// }
 
 func main() {
 	config.ConnectDB()
@@ -42,8 +28,16 @@ func SetupRouter() *gin.Engine {
 
 	router.GET("/", base.Index)
 
+	au := router.Group("api/auth")
+	{
+		au.POST("/login", auth.Login)
+		au.POST("/register", auth.Register)
+		au.GET("/logout", auth.Logout)
+	}
+
 	v1 := router.Group("api/v1")
 	{
+		v1.Use(auth.JWTMiddleware())
 		// blog
 		v1.GET("/blog", blogcontroller.Index)
 		v1.POST("/blog", blogcontroller.Create)

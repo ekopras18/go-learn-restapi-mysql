@@ -9,110 +9,94 @@ import (
 
 func Index(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"url":   "https://ekopras18.com/api/v1",
-		"data":  "RESTful API basics: Golang (gin, gorm) x Mysql",
-		"alive": true})
+		"url_base": "https://ekopras.engineer/api/v1",
+		"url_auth": "https://ekopras.engineer/api/auth",
+		"message":  "RESTful API : Golang (gin, gorm) x Mysql with JWT Auth",
+		"alive":    true,
+	})
 }
 
 func ResponseIndex(err error, data interface{}, c *gin.Context) {
 
 	if err != nil {
-		c.AbortWithStatusJSON(500, gin.H{
-			"status":  false,
-			"message": "Failed to retrieve data from the database " + err.Error(),
-			"data":    []any{},
-		})
+		ResponseWithData(c, false, http.StatusInternalServerError, "Failed to retrieve data from the database "+err.Error(), []any{})
 		return
 	}
 
-	c.JSON(200, gin.H{
-		"status":  true,
-		"message": "success get data",
-		"data":    data,
-	})
+	ResponseWithData(c, true, http.StatusOK, "success", data)
+
 }
 
-func ResponseValidation(err error, c *gin.Context) {
+func ResponseBindJson(err error, c *gin.Context) {
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-			"status":  false,
-			"message": "Failed to bind JSON " + err.Error(),
-		})
+		Response(c, false, http.StatusBadRequest, "Failed to bind JSON "+err.Error())
 		return
 	}
 
+}
+
+func ResponseValidate(err error, c *gin.Context) {
+	Response(c, false, http.StatusBadRequest, err.Error())
 }
 
 func ResponseCreate(err error, data interface{}, c *gin.Context) {
 
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-			"status":  false,
-			"message": "Failed to create data " + err.Error(),
-		})
+		Response(c, false, http.StatusInternalServerError, "Failed to create "+err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":  true,
-		"message": "success create data",
-	})
+	Response(c, true, http.StatusOK, "create successfully")
 }
 
 func ResponseUpdate(rowsAffected int64, id string, data interface{}, c *gin.Context) {
 
 	if rowsAffected == 0 {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-			"status":  false,
-			"message": "Record not found!",
-		})
+		Response(c, false, http.StatusBadRequest, "Record not found!")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":  true,
-		"message": "success updated data",
-	})
+	Response(c, true, http.StatusOK, "update successfully")
 }
 
 func ResponseShow(err error, data interface{}, c *gin.Context) {
 	if err != nil {
 		switch err {
 		case gorm.ErrRecordNotFound:
-			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"status":  true,
-				"message": "Record not found!",
-				"data":    []any{},
-			})
+			ResponseWithData(c, false, http.StatusNotFound, "Record not found!", []any{})
 			return
 		default:
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-				"status":  false,
-				"message": "Failed to retrieve data from the database " + err.Error(),
-			})
+			Response(c, false, http.StatusInternalServerError, "Failed to retrieve data from the database "+err.Error())
 			return
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":  true,
-		"message": "success",
-		"data":    data,
-	})
-
+	ResponseWithData(c, true, http.StatusOK, "success", data)
 }
 
 func ResponseDelete(rowsAffected int64, id string, c *gin.Context) {
 	if rowsAffected == 0 {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-			"status":  false,
-			"message": "Record not found!",
-		})
+		Response(c, false, http.StatusBadRequest, "Record not found!")
 		return
 	}
+	Response(c, true, http.StatusOK, "deleted successfully")
+}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":  true,
-		"message": "success deleted data",
+func Response(c *gin.Context, status bool, code int, message string) {
+	c.JSON(code, gin.H{
+		"status":  status,
+		"code":    code,
+		"message": message,
 	})
+	c.Abort()
+}
+
+func ResponseWithData(c *gin.Context, status bool, code int, message string, data interface{}) {
+	c.JSON(code, gin.H{
+		"status":  status,
+		"code":    code,
+		"message": message,
+		"data":    data,
+	})
+	c.Abort()
 }

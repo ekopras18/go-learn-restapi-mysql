@@ -6,7 +6,10 @@ import (
 	"go-learn-restapi-mysql/models"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
+
+var validate = validator.New()
 
 func Index(c *gin.Context) {
 	var blogs []models.Blog
@@ -28,7 +31,10 @@ func Create(c *gin.Context) {
 
 	err := c.ShouldBindJSON(&blog)
 	// parse error to mastercontroller
-	base.ResponseValidation(err, c)
+	base.ResponseBindJson(err, c)
+
+	err = validate.Struct(blog)
+	base.ResponseValidate(err, c)
 
 	err = config.DB.Create(&blog).Error
 	// parse error and data to mastercontroller
@@ -51,7 +57,7 @@ func Update(c *gin.Context) {
 
 	err := c.ShouldBindJSON(&blog)
 	// parse error to mastercontroller
-	base.ResponseValidation(err, c)
+	base.ResponseBindJson(err, c)
 
 	rowsAffected := config.DB.Model(&blog).Where("id = ?", id).Updates(&blog).RowsAffected
 	// parse error and data to mastercontroller
