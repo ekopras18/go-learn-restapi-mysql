@@ -4,6 +4,7 @@ import (
 	"go-learn-restapi-mysql/config"
 	"go-learn-restapi-mysql/controllers/base"
 	"go-learn-restapi-mysql/models"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -15,11 +16,20 @@ func Index(c *gin.Context) {
 	var blogs []models.Blog
 	err := config.DB.Find(&blogs).Error
 	if len(blogs) == 0 {
-		c.AbortWithStatusJSON(404, gin.H{
-			"status":  false,
-			"message": "No data found",
-			"data":    blogs,
-		})
+		base.ResponseWithData(c, false, http.StatusNotFound, "No data found", []any{})
+		return
+	}
+	// parse error and data to mastercontroller
+	base.ResponseIndex(err, blogs, c)
+}
+
+func Search(c *gin.Context) {
+	var blogs []models.Blog
+	q := c.Query("q")
+
+	err := config.DB.Where("title LIKE ? OR tags LIKE ?", "%"+q+"%", "%"+q+"%").Find(&blogs).Error
+	if len(blogs) == 0 {
+		base.ResponseWithData(c, false, http.StatusNotFound, "Record not found!", blogs)
 		return
 	}
 	// parse error and data to mastercontroller

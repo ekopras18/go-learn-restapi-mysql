@@ -52,7 +52,7 @@ func ResponseCreate(err error, data interface{}, c *gin.Context) {
 func ResponseUpdate(rowsAffected int64, id string, data interface{}, c *gin.Context) {
 
 	if rowsAffected == 0 {
-		Response(c, false, http.StatusBadRequest, "Record not found!")
+		Response(c, false, http.StatusNotFound, "Record not found!")
 		return
 	}
 

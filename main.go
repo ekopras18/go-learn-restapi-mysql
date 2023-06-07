@@ -26,26 +26,41 @@ func SetupRouter() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
 
-	router.GET("/", base.Index)
-
-	au := router.Group("api/auth")
+	// authentication route
+	authentication := router.Group("api/auth")
 	{
-		au.POST("/login", auth.Login)
-		au.POST("/register", auth.Register)
-		au.GET("/logout", auth.Logout)
+		authentication.POST("/login", auth.Login)
+		authentication.POST("/register", auth.Register)
+		authentication.GET("/logout", auth.Logout)
 	}
 
+	// base route
+	router.GET("/", base.Index)
+
+	// search route
+	search := router.Group("api/search")
+	{
+		search.GET("/blogs", blogcontroller.Search)
+	}
+
+	// api/v1 route without JWT middleware
+	noauth := router.Group("api/v1")
+	{
+		noauth.GET("/blogs", blogcontroller.Index)
+		noauth.GET("/blog/:id", blogcontroller.Show)
+	}
+
+	// api/v1 route with JWT middleware
 	v1 := router.Group("api/v1")
 	{
 		v1.Use(auth.JWTMiddleware())
 		// blog
-		v1.GET("/blog", blogcontroller.Index)
 		v1.POST("/blog", blogcontroller.Create)
-		v1.GET("/blog/:id", blogcontroller.Show)
 		v1.PUT("/blog/:id", blogcontroller.Update)
 		v1.DELETE("/blog/:id", blogcontroller.Delete)
 
 		// more controller
+
 	}
 	return router
 }
