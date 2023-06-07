@@ -32,7 +32,7 @@ func ConnectDB() {
 		return
 	}
 
-	database.AutoMigrate(&models.Blog{})
+	database.AutoMigrate(&models.Blog{}, &models.Users{})
 
 	DB = database
 }

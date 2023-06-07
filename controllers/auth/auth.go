@@ -1,90 +1,170 @@
 package auth
 
 import (
+	"go-learn-restapi-mysql/config"
+	"go-learn-restapi-mysql/controllers/base"
+	"go-learn-restapi-mysql/models"
 	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+	"github.com/golang-jwt/jwt/v4"
+	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
+var validate = validator.New()
+
 // Login function
-func Login(w http.ResponseWriter, r *http.Request) {
+func Login(c *gin.Context) {
+	// Initialize blog model
+	var user_params models.Users
 
-	// // Initialize database connection
-	// db := config.ConnectDB()
+	// Get the JSON body and decode into credentials
+	err := c.ShouldBindJSON(&user_params)
+	base.ResponseBindJson(err, c)
 
-	// // Initialize blog model
-	// var user models.User
+	var user models.Users
+	if err := config.DB.Where("email = ?", user_params.Email).First(&user).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			base.Response(c, false, http.StatusUnauthorized, "Wrong credentials")
+		} else {
+			base.Response(c, false, http.StatusInternalServerError, "Error while querying the user")
+		}
+		return
+	}
 
-	// // Get the JSON body and decode into credentials
-	// err := json.NewDecoder(r.Body).Decode(&user)
-	// baseUtility.Catch(err)
+	// Compare the stored hashed password with the provided password
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(user_params.Password)); err != nil {
+		base.Response(c, false, http.StatusUnauthorized, "Wrong credentials")
+		return
+	}
 
-	// // Validate the user credentials
-	// if user.Username != "admin" || user.Password != "admin" {
-	// 	w.WriteHeader(http.StatusUnauthorized)
-	// 	fmt.Fprintf(w, "Wrong credentials")
-	// 	return
-	// }
+	expTime := time.Now().Add(time.Minute * time.Duration(config.JWT_EXPIRE))
+	claims := &config.JWTClaim{
+		Email:    user.Email,
+		Password: user.Password,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    "learn-restapi-mysql",
+			ExpiresAt: jwt.NewNumericDate(expTime),
+		},
+	}
 
-	// // Generate token
-	// token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-	// 	"username": user.Username,
-	// 	"password": user.Password,
-	// 	"exp":      time.Now().Add(time.Hour * 24).Unix(),
-	// })
+	// Generate token
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// // Sign token with secret key
-	// tokenString, err := token.SignedString([]byte("secret"))
-	// baseUtility.Catch(err)
+	// Sign token with secret key
+	tokenString, err := token.SignedString(config.JWT_KEY)
+	if err != nil {
+		base.Response(c, false, http.StatusInternalServerError, "Error while signing the token")
+		return
+	}
 
-	// // Return token
-	// w.WriteHeader(http.StatusOK)
-	// w.Write([]byte(tokenString))
+	// Set cookie
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "token",
+		Path:     "/",
+		Value:    tokenString,
+		HttpOnly: true,
+	})
 
-	// // Insert user to database
-	// db.Create(&user)
+	// Return token
+	data := gin.H{
+		"name":          user.Name,
+		"token":         tokenString,
+		"token_expired": expTime,
+	}
+
+	base.ResponseWithData(c, true, http.StatusOK, "Login successfully", data)
 
 }
 
 // Register function
-func Register(w http.ResponseWriter, r *http.Request) {
+func Register(c *gin.Context) {
+	// Initialize user model
+	var user models.Users
 
-	// // Initialize database connection
-	// db := config.ConnectDB()
+	// Get the JSON body and decode into user
+	err := c.ShouldBindJSON(&user)
+	base.ResponseBindJson(err, c)
 
-	// // Initialize blog model
-	// var user models.User
+	// Validate user input
+	if err := validate.Struct(user); err != nil {
+		errors := err.(validator.ValidationErrors)
+		base.ResponseValidate(errors, c)
+		return
+	}
 
-	// // Get the JSON body and decode into credentials
-	// err := json.NewDecoder(r.Body).Decode(&user)
-	// baseUtility.Catch(err)
+	// Insert user to database
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		base.Response(c, false, http.StatusInternalServerError, "Failed to hash password")
 
-	// // Insert user to database
-	// db.Create(&user)
+		return
+	}
+	user.Password = string(hashedPassword)
+	err = config.DB.Create(&user).Error
 
-	// // Return user
-	// w.WriteHeader(http.StatusOK)
-	// json.NewEncoder(w).Encode(user)
-
+	base.ResponseCreate(err, user, c)
 }
 
 // Logout function
+func Logout(c *gin.Context) {
+	// Clear cookie
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     "token",
+		Path:     "/",
+		Value:    "",
+		HttpOnly: true,
+		MaxAge:   -1,
+	})
 
-func Logout(w http.ResponseWriter, r *http.Request) {
+	// Return token
+	base.Response(c, true, http.StatusOK, "Logout successfully")
+}
 
-	// // Initialize database connection
-	// db := config.ConnectDB()
+func JWTMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		cookie, err := c.Cookie("token")
+		if err != nil {
+			if err == http.ErrNoCookie {
+				base.Response(c, false, http.StatusUnauthorized, "Unauthorized")
+				return
+			}
+		}
 
-	// // Initialize blog model
-	// var user models.User
+		// Mengambil token value
+		tokenString := cookie
 
-	// // Get the JSON body and decode into credentials
-	// err := json.NewDecoder(r.Body).Decode(&user)
-	// baseUtility.Catch(err)
+		// parsing token jwt
+		claims := &config.JWTClaim{}
+		token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+			return []byte(config.JWT_KEY), nil
+		})
 
-	// // Delete user from database
-	// db.Delete(&user)
+		if err != nil {
+			if ve, ok := err.(*jwt.ValidationError); ok {
+				if ve.Errors&jwt.ValidationErrorSignatureInvalid != 0 {
+					// token invalid
+					base.Response(c, false, http.StatusUnauthorized, "Unauthorized")
+					return
+				} else if ve.Errors&jwt.ValidationErrorExpired != 0 {
+					// token expired
+					base.Response(c, false, http.StatusUnauthorized, "Unauthorized, Token expired!")
+					return
+				}
+			}
 
-	// // Return user
-	// w.WriteHeader(http.StatusOK)
-	// json.NewEncoder(w).Encode(user)
+			base.Response(c, false, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
 
+		if !token.Valid {
+			base.Response(c, false, http.StatusUnauthorized, "Unauthorized")
+			return
+		}
+
+		c.Next()
+	}
 }
